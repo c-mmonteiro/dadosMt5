@@ -1,7 +1,7 @@
 import MetaTrader5 as mt5
 import pandas as pd
 from datetime import datetime, timedelta
-from bs import *
+from blackScholes.bs import *
 import pytz
 
 
