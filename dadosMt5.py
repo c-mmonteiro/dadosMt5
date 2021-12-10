@@ -5,7 +5,7 @@ from bs import *
 import pytz
 
 
-class dados_mt5:
+class dadosMt5:
     def __init__(self, ativo, numDiasVol):
 
         # pd.set_option('display.max_columns', 500)
