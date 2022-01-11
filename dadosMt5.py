@@ -89,7 +89,7 @@ class dadosMt5:
     def get_volHistorica(self):
         return self.sigma
     
-    def atualiza_dados(self, idxVencimento, diaInicio):
+    def atualiza_dados(self, idxVencimento, diaInicio, tipo):
         vencimento = self.vencimentos['Vencimeto_raw'][idxVencimento]
         self.tempoVencimento = ((datetime.utcfromtimestamp(vencimento) - datetime.utcnow()).days + diaInicio) / 365
 
@@ -109,12 +109,64 @@ class dadosMt5:
 
         for l in self.listaSimbolos:
             if l.expiration_time == vencimento:
-                val = mt5.copy_rates_from_pos(l.name, mt5.TIMEFRAME_D1, diaInicio, 1)
+                if ((not mt5.market_book_add(l.name)) or ((tipo != "COMPRA") and (tipo != "VENDA") and (tipo != "MEDIA"))):
+                    if ((tipo == "COMPRA") or (tipo == "VENDA") or (tipo == "MEDIA")):
+                        print(f'ALERTA: O ativo {l.name} não pode ser adicionado!')
+                    mt5.market_book_release(l.name)
+                    val = mt5.copy_rates_from_pos(l.name, mt5.TIMEFRAME_D1, diaInicio, 1)
+                    if val:
+                        valor = val['close'][0]
+                    else:
+                        print(f'ALERTA: Problema na aquisição do valor de {l.name} pelo histórico.')
+                else:
+                    val = mt5.market_book_get(l.name)
+                    if val:
+                        if tipo == "VENDA":
+                            val_venda = []
+                            for it in val:
+                                if it[0] == 1:
+                                    val_venda.append(it[1])
+                            if val_venda:
+                                valor = min(val_venda)
+                            else:
+                                val = None
+                                print(f'ALERTA: Problema na aquisição do valor de VENDA do ativo {l.name}')
+                        elif tipo == "COMPRA":
+                            val_compra = []
+                            for it in val:
+                                if it[0] == 2:
+                                    val_compra.append(it[1])
+                            if val_compra:
+                                valor = max(val_compra)
+                            else:
+                                val = None
+                                print(f'ALERTA: Problema na aquisição do valor de COMPRA do ativo {l.name}')
+                        else:
+                            val_compra = []
+                            val_venda = []
+                            for it in val:
+                                if it[0] == 1:
+                                    val_venda.append(it[1])
+                                else:
+                                    val_compra.append(it[1])
+                            if val_compra and val_venda:
+                                valor = (max(val_compra) + min(val_venda))/2
+                            else:
+                                val = None
+                                print(f'ALERTA: Problema na aquisição do valor de COMPRA ou de VENDA do ativo {l.name}')
+                    else:
+                        print(f'ALERTA: Problema na aquisição do valor de {l.name} pelo book.')
+                        val = mt5.copy_rates_from_pos(l.name, mt5.TIMEFRAME_D1, diaInicio, 1)
+                        if val:
+                            valor = val['close'][0]
+                        else:
+                            print(f'ALERTA: Problema na aquisição do valor de {l.name} pelo histórico.')    
                 if val:
                     self.opcoes = self.opcoes.append(
-                        {"Codigo": l.name, "Ultimo": val['close'][0], "Strike": l.option_strike,
-                         "Tipo": ["CALL", "PUT"][l.option_right == 1], "Estilo": ["EU", "AM"][l.option_mode == 1]},
+                        {"Codigo": l.name, "Ultimo": valor, "Strike": l.option_strike,
+                            "Tipo": ["CALL", "PUT"][l.option_right == 1], "Estilo": ["EU", "AM"][l.option_mode == 1]},
                         ignore_index=True)
+                
 
         self.opcoes = self.opcoes.sort_values(by="Strike")
         self.opcoes = self.opcoes.reset_index()
